@@ -1,0 +1,839 @@
+<title>Entry Gate Scanner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+:root{
+  --night:#0E0F1A; --surface:#181A2B; --surface-2:#20233A; --surface-3:#2A2E4A;
+  --line:#333758; --line-soft:#282c46;
+  --ink:#F5F3EE; --ink-dim:#A6ABC8; --ink-faint:#6C7196;
+  --amber:#FFB020; --amber-soft:#3a2c10;
+  --green:#31C971; --green-deep:#0f3a24; --green-glow:rgba(49,201,113,.45);
+  --red:#FF5147; --red-deep:#3f120f; --red-glow:rgba(255,81,71,.45);
+  --violet:#8B7BFF;
+  --radius:16px; --radius-sm:11px;
+  --shadow:0 10px 40px rgba(0,0,0,.45);
+  --ff-display:'Bricolage Grotesque',system-ui,sans-serif;
+  --ff-body:'Manrope',system-ui,-apple-system,sans-serif;
+  --ff-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:
+    radial-gradient(1200px 700px at 82% -8%, rgba(139,123,255,.14), transparent 60%),
+    radial-gradient(900px 600px at 0% 108%, rgba(255,176,32,.10), transparent 55%),
+    var(--night);
+  color:var(--ink); font-family:var(--ff-body); font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font-family:inherit}
+
+.wrap{max-width:1060px;margin:0 auto;padding:0 16px 120px;min-height:100%}
+
+/* ---- top bar ---- */
+.topbar{position:sticky;top:0;z-index:40;background:linear-gradient(180deg,var(--night) 72%,rgba(14,15,26,0));
+  padding:14px 0 10px;display:flex;align-items:center;gap:14px}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.logo{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;
+  background:linear-gradient(145deg,var(--amber),#ff7a3d);color:#1a1204;box-shadow:0 4px 16px rgba(255,176,32,.35)}
+.logo svg{width:22px;height:22px}
+.brand-txt{min-width:0}
+.event-name{font-family:var(--ff-display);font-weight:700;font-size:16px;letter-spacing:-.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
+.event-sub{font-size:11px;color:var(--ink-faint);letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+.count-pill{margin-left:auto;display:flex;align-items:center;gap:10px;background:var(--surface);
+  border:1px solid var(--line);border-radius:999px;padding:7px 8px 7px 15px}
+.count-pill .n{font-family:var(--ff-mono);font-weight:700;font-size:20px;line-height:1;font-variant-numeric:tabular-nums}
+.count-pill .lbl{font-size:10px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.12em;font-weight:600}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 var(--green-glow);
+  animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 var(--green-glow)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.sync-off .live-dot{background:var(--ink-faint);animation:none}
+
+/* ---- tabs ---- */
+.tabs{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line-soft);border-radius:14px;
+  padding:5px;margin:4px 0 20px}
+.tab{flex:1;padding:10px 6px;border-radius:10px;font-weight:600;font-size:13.5px;color:var(--ink-dim);
+  display:flex;align-items:center;justify-content:center;gap:7px;transition:.15s}
+.tab svg{width:16px;height:16px;opacity:.85}
+.tab[aria-selected="true"]{background:var(--surface-3);color:var(--ink);box-shadow:0 1px 0 rgba(255,255,255,.04) inset}
+.tab .badge{font-family:var(--ff-mono);font-size:11px;background:var(--surface-2);border-radius:6px;padding:1px 6px;color:var(--ink-dim)}
+
+.panel{display:none;animation:fade .25s ease}
+.panel.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ---- scan stage ---- */
+.stage{position:relative;border-radius:var(--radius);overflow:hidden;background:#05060c;
+  border:1px solid var(--line);aspect-ratio:4/3;max-height:62vh;margin:0 auto;display:grid;place-items:center}
+@media(min-width:720px){.stage{aspect-ratio:16/9}}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);background:#05060c}
+#video.no-mirror{transform:none}
+#overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.scan-idle{position:relative;z-index:2;text-align:center;padding:26px;max-width:340px}
+.scan-idle .ring{width:74px;height:74px;border-radius:50%;margin:0 auto 16px;display:grid;place-items:center;
+  background:var(--surface-2);border:1px solid var(--line)}
+.scan-idle .ring svg{width:34px;height:34px;color:var(--amber)}
+.scan-idle h2{font-family:var(--ff-display);font-weight:700;margin:0 0 6px;font-size:21px}
+.scan-idle p{color:var(--ink-dim);margin:0 0 18px;font-size:14px}
+
+.reticle{position:absolute;z-index:1;inset:12% 22%;border-radius:20px;
+  box-shadow:0 0 0 100vmax rgba(5,6,12,.35);pointer-events:none;opacity:0;transition:opacity .3s}
+.scanning .reticle{opacity:1}
+.reticle::before,.reticle::after,.reticle i::before,.reticle i::after{content:"";position:absolute;width:26px;height:26px;
+  border:3px solid var(--amber);opacity:.9}
+.reticle::before{top:-3px;left:-3px;border-right:0;border-bottom:0;border-radius:14px 0 0 0}
+.reticle::after{top:-3px;right:-3px;border-left:0;border-bottom:0;border-radius:0 14px 0 0}
+.reticle i::before{bottom:-3px;left:-3px;border-right:0;border-top:0;border-radius:0 0 0 14px}
+.reticle i::after{bottom:-3px;right:-3px;border-left:0;border-top:0;border-radius:0 0 14px 0}
+
+/* verdict overlay */
+.verdict{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:22px;opacity:0;pointer-events:none;transition:opacity .18s;backdrop-filter:blur(2px)}
+.verdict.show{opacity:1}
+.verdict.granted{background:linear-gradient(180deg,rgba(15,58,36,.82),rgba(9,32,20,.92))}
+.verdict.denied{background:linear-gradient(180deg,rgba(63,18,15,.82),rgba(36,9,8,.93))}
+.verdict.already{background:linear-gradient(180deg,rgba(58,44,16,.84),rgba(32,24,8,.93))}
+.verdict .vicon{width:96px;height:96px;border-radius:50%;display:grid;place-items:center;margin-bottom:14px;
+  animation:pop .35s cubic-bezier(.2,1.4,.4,1)}
+@keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.verdict.granted .vicon{background:var(--green);box-shadow:0 0 44px var(--green-glow)}
+.verdict.denied .vicon{background:var(--red);box-shadow:0 0 44px var(--red-glow)}
+.verdict.already .vicon{background:var(--amber);box-shadow:0 0 44px rgba(255,176,32,.5)}
+.verdict .vicon svg{width:54px;height:54px;color:#08120b;stroke-width:3}
+.verdict.denied .vicon svg{color:#1a0605}
+.verdict .vstate{font-family:var(--ff-display);font-weight:800;font-size:clamp(30px,8vw,52px);line-height:1;letter-spacing:-.02em}
+.verdict .vname{font-size:clamp(17px,4.5vw,24px);font-weight:700;margin-top:12px}
+.verdict .vmeta{font-family:var(--ff-mono);font-size:13px;color:rgba(255,255,255,.8);margin-top:7px}
+.verdict .vmeta b{color:#fff}
+.verdict .v-next{pointer-events:auto;margin-top:22px;display:inline-flex;align-items:center;gap:9px;
+  background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.5);color:#fff;font-weight:700;font-size:16px;
+  padding:13px 26px;border-radius:999px;backdrop-filter:blur(4px)}
+.verdict .v-next:hover{background:rgba(255,255,255,.26)}
+.verdict .v-next:active{transform:translateY(1px)}
+.verdict .v-next svg{width:20px;height:20px}
+
+.stage-foot{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.status{display:flex;align-items:center;gap:9px;color:var(--ink-dim);font-size:13.5px;font-weight:500;flex:1;min-width:180px}
+.status .s-dot{width:9px;height:9px;border-radius:50%;background:var(--ink-faint);flex:none}
+.scanning .status .s-dot{background:var(--amber);animation:pulse 1.6s infinite}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;padding:12px 18px;
+  font-weight:700;font-size:14.5px;transition:.15s;border:1px solid transparent;white-space:nowrap}
+.btn svg{width:17px;height:17px}
+.btn-primary{background:linear-gradient(145deg,var(--amber),#ff8a2b);color:#1a1204;box-shadow:0 6px 20px rgba(255,140,43,.28)}
+.btn-primary:active{transform:translateY(1px)}
+.btn-ghost{background:var(--surface-2);border-color:var(--line);color:var(--ink)}
+.btn-ghost:hover{background:var(--surface-3)}
+.btn-danger{background:var(--red-deep);border-color:#5a2420;color:#ffb4ae}
+.btn-sm{padding:8px 13px;font-size:13px;border-radius:10px}
+.icon-btn{width:42px;height:42px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line);
+  display:grid;place-items:center;flex:none}
+.icon-btn svg{width:19px;height:19px;color:var(--ink-dim)}
+.icon-btn:hover{background:var(--surface-3)}
+
+/* legend */
+.legend{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}
+.legend .lg{background:var(--surface);border:1px solid var(--line-soft);border-radius:12px;padding:13px 13px 12px}
+.legend .lg .tag{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:12.5px;letter-spacing:.02em}
+.legend .lg .sw{width:10px;height:10px;border-radius:3px}
+.legend .lg p{margin:7px 0 0;font-size:12px;color:var(--ink-faint);line-height:1.4}
+.sw.g{background:var(--green)}.sw.r{background:var(--red)}.sw.a{background:var(--amber)}
+.legend .g{color:var(--green)}.legend .r{color:var(--red)}.legend .a{color:var(--amber)}
+
+/* section heads */
+.shead{display:flex;align-items:center;gap:12px;margin:2px 0 16px}
+.shead h2{font-family:var(--ff-display);font-weight:700;font-size:20px;margin:0;letter-spacing:-.01em}
+.shead .sub{font-size:12.5px;color:var(--ink-faint)}
+.shead .right{margin-left:auto;display:flex;gap:8px}
+
+/* cards */
+.card{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--radius);padding:18px}
+.card + .card{margin-top:14px}
+
+.enroll-grid{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:720px){.enroll-grid{grid-template-columns:340px 1fr}}
+.cap-box{background:#05060c;border:1px solid var(--line);border-radius:var(--radius-sm);aspect-ratio:1;
+  overflow:hidden;position:relative;display:grid;place-items:center}
+.cap-box video,.cap-box img,.cap-box canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cap-box video{transform:scaleX(-1)}
+.cap-box .ph{z-index:1;text-align:center;color:var(--ink-faint);font-size:13px;padding:20px}
+.cap-box .ph svg{width:40px;height:40px;color:var(--ink-faint);margin-bottom:8px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--ink-dim);margin-bottom:6px;letter-spacing:.02em}
+.field input,.field select{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+  padding:11px 13px;color:var(--ink);font-size:14.5px;outline:none}
+.field input:focus,.field select:focus{border-color:var(--amber)}
+.row2{display:flex;gap:10px}.row2>*{flex:1}
+.hint{font-size:12px;color:var(--ink-faint);margin:8px 0 0;line-height:1.45}
+.enroll-actions{display:flex;gap:9px;margin-top:6px;flex-wrap:wrap}
+
+/* roster list */
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:16px}
+.person{background:var(--surface);border:1px solid var(--line-soft);border-radius:14px;padding:12px;text-align:center;position:relative}
+.person .pf{width:74px;height:74px;border-radius:50%;object-fit:cover;margin:2px auto 10px;display:block;
+  border:2px solid var(--line);background:var(--surface-3)}
+.person .pn{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.person .pr{font-family:var(--ff-mono);font-size:11.5px;color:var(--ink-faint);margin-top:2px}
+.person .del{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:8px;background:var(--surface-3);
+  display:grid;place-items:center;opacity:.7}
+.person .del:hover{opacity:1;background:var(--red-deep)}
+.person .del svg{width:14px;height:14px}
+.person.in::after{content:"IN";position:absolute;top:8px;left:8px;font-family:var(--ff-mono);font-size:10px;font-weight:700;
+  background:var(--green-deep);color:var(--green);padding:2px 6px;border-radius:6px;letter-spacing:.05em}
+
+/* log */
+.log-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.stat{background:var(--surface);border:1px solid var(--line-soft);border-radius:14px;padding:15px 16px}
+.stat .v{font-family:var(--ff-mono);font-weight:700;font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+.stat .k{font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.11em;font-weight:600;margin-top:7px}
+.stat.g .v{color:var(--green)}
+.entry{display:flex;align-items:center;gap:13px;padding:12px 4px;border-bottom:1px solid var(--line-soft)}
+.entry:last-child{border-bottom:none}
+.entry .ef{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;background:var(--surface-3);border:1px solid var(--line)}
+.entry .en{font-weight:700;font-size:14.5px}
+.entry .er{font-family:var(--ff-mono);font-size:12px;color:var(--ink-faint)}
+.entry .et{margin-left:auto;text-align:right;font-family:var(--ff-mono);font-size:12px;color:var(--ink-dim)}
+.entry .et .gate{color:var(--ink-faint);font-size:10.5px;text-transform:uppercase;letter-spacing:.08em}
+
+.empty{text-align:center;padding:44px 20px;color:var(--ink-faint)}
+.empty svg{width:46px;height:46px;margin-bottom:12px;opacity:.5}
+.empty h3{font-family:var(--ff-display);color:var(--ink-dim);margin:0 0 6px;font-weight:700;font-size:17px}
+.empty p{margin:0;font-size:13.5px;max-width:320px;margin-inline:auto}
+
+/* settings */
+.set-row{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--line-soft)}
+.set-row:last-child{border-bottom:none}
+.set-row .lbl{font-weight:600;font-size:14px}
+.set-row .desc{font-size:12px;color:var(--ink-faint);margin-top:2px}
+.set-row .ctrl{margin-left:auto;flex:none;min-width:120px}
+.set-row .ctrl input,.set-row .ctrl select{width:100%;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:9px;padding:9px 11px;color:var(--ink);font-size:14px;text-align:right}
+.range-wrap{display:flex;align-items:center;gap:10px}
+.range-wrap output{font-family:var(--ff-mono);font-size:13px;color:var(--amber);width:34px;text-align:right}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);z-index:100;
+  background:var(--surface-3);border:1px solid var(--line);border-radius:12px;padding:12px 18px;font-size:13.5px;
+  font-weight:600;box-shadow:var(--shadow);opacity:0;transition:.25s;pointer-events:none;max-width:90vw}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{border-color:#5a2420;color:#ffb4ae}
+.toast.ok{border-color:#1f5a3a;color:#9cf0c0}
+
+/* loader */
+#boot{position:fixed;inset:0;z-index:200;background:var(--night);display:grid;place-items:center;transition:opacity .4s}
+#boot.hide{opacity:0;pointer-events:none}
+.boot-in{text-align:center}
+.boot-in .logo{width:56px;height:56px;margin:0 auto 18px;border-radius:16px}
+.boot-in .logo svg{width:30px;height:30px}
+.boot-in h1{font-family:var(--ff-display);font-weight:800;font-size:22px;margin:0 0 10px;letter-spacing:-.01em}
+.boot-bar{width:200px;height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin:0 auto}
+.boot-bar i{display:block;height:100%;width:30%;background:linear-gradient(90deg,var(--amber),#ff7a3d);border-radius:3px;
+  animation:load 1.1s ease-in-out infinite}
+@keyframes load{0%{margin-left:-30%}100%{margin-left:100%}}
+.boot-in p{color:var(--ink-faint);font-size:12.5px;margin:14px 0 0}
+.hidden{display:none!important}
+.demo-flag{font-size:11px;color:var(--ink-faint);background:var(--surface-2);border:1px dashed var(--line);
+  border-radius:8px;padding:3px 9px;display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.ro-note{display:flex;align-items:flex-start;gap:11px;background:var(--surface);border:1px solid var(--line-soft);
+  border-radius:12px;padding:14px 16px;color:var(--ink-dim);font-size:13.5px;line-height:1.45}
+.ro-note svg{width:20px;height:20px;color:var(--amber);flex:none;margin-top:1px}
+/* admin gating: hide edit affordances unless signed in as admin */
+body:not(.is-admin) #enroll-card,
+body:not(.is-admin) .tab[data-tab="settings"],
+body:not(.is-admin) .person .del{display:none!important}
+#admin-btn.on{background:var(--green-deep);border-color:#1f5a3a}
+#admin-btn.on svg{color:var(--green)}
+</style>
+
+<div id="boot"><div class="boot-in">
+  <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></div>
+  <h1>Entry Gate Scanner</h1>
+  <div class="boot-bar"><i></i></div>
+  <p id="boot-msg">Loading face-recognition engine…</p>
+</div></div>
+
+<div class="wrap">
+  <div class="topbar" id="topbar">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></div>
+      <div class="brand-txt">
+        <div class="event-name" id="ev-name">Freshers Party 2026</div>
+        <div class="event-sub" id="gate-label">Gate 1</div>
+      </div>
+    </div>
+    <div class="count-pill" id="count-pill" title="Live check-ins across all gates">
+      <div class="live-dot"></div>
+      <div><div class="n" id="live-count">0</div></div>
+      <div class="lbl">Checked<br>in</div>
+    </div>
+    <button class="icon-btn" id="admin-btn" title="Admin sign-in"><svg id="admin-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-tab="scan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3.2"/></svg>Scan</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="roster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Roster<span class="badge" id="roster-badge">0</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13l2 2 4-4"/></svg>Log</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Setup</button>
+  </div>
+
+  <!-- SCAN -->
+  <section class="panel active" id="p-scan">
+    <div class="stage" id="stage">
+      <video id="video" playsinline muted autoplay></video>
+      <canvas id="overlay"></canvas>
+      <div class="reticle"><i></i></div>
+      <div class="scan-idle" id="scan-idle">
+        <div class="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+        <h2 id="idle-h2">Point the camera at each guest</h2>
+        <p id="idle-p">The scanner reads the face and instantly shows whether they're on the guest list.</p>
+        <button class="btn btn-primary" id="btn-start"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Start scanning</button>
+      </div>
+      <div class="verdict" id="verdict">
+        <div class="vicon" id="v-icon"></div>
+        <div class="vstate" id="v-state"></div>
+        <div class="vname" id="v-name"></div>
+        <div class="vmeta" id="v-meta"></div>
+        <button class="v-next" id="v-next" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Scan next</button>
+      </div>
+    </div>
+    <div class="stage-foot">
+      <div class="status"><span class="s-dot"></span><span id="scan-status">Camera off — tap Start scanning</span></div>
+      <button class="icon-btn hidden" id="btn-flip" title="Switch camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
+      <button class="icon-btn hidden" id="btn-stop" title="Stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+    </div>
+    <div class="legend">
+      <div class="lg"><span class="tag g"><span class="sw g"></span>GRANTED</span><p>Face matches the guest list — logs the entry and turns the screen green.</p></div>
+      <div class="lg"><span class="tag a"><span class="sw a"></span>ALREADY IN</span><p>Recognised, but this guest was already checked in — flags a repeat.</p></div>
+      <div class="lg"><span class="tag r"><span class="sw r"></span>DENIED</span><p>Face isn't on the list — screen turns red so staff can step in.</p></div>
+    </div>
+  </section>
+
+  <!-- ROSTER -->
+  <section class="panel" id="p-roster">
+    <div class="shead"><h2>Guest list</h2><span class="sub" id="roster-sub">No guests enrolled yet</span>
+      <div class="right"><span class="demo-flag" id="mode-flag">Demo mode</span></div></div>
+    <div class="ro-note" id="ro-note" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Only the event admin can add or remove guests. You can view the list and scan entries. Tap the lock icon to sign in as admin.</div>
+    <div class="card" id="enroll-card">
+      <div class="enroll-grid">
+        <div>
+          <div class="cap-box" id="cap-box">
+            <video id="enroll-video" playsinline muted autoplay class="hidden"></video>
+            <img id="enroll-preview" class="hidden" alt="">
+            <div class="ph" id="cap-ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><div>Add a face by camera or photo</div></div>
+          </div>
+          <div class="enroll-actions">
+            <button class="btn btn-ghost btn-sm" id="en-cam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Use camera</button>
+            <button class="btn btn-ghost btn-sm" id="en-capture" style="display:none"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="9"/></svg>Capture</button>
+            <button class="btn btn-ghost btn-sm" id="en-upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>Upload photo</button>
+            <input type="file" id="file-input" accept="image/*" class="hidden">
+          </div>
+        </div>
+        <div>
+          <div class="field"><label>Full name</label><input id="en-name" placeholder="e.g. Aarav Sharma" autocomplete="off"></div>
+          <div class="row2">
+            <div class="field"><label>Roll no / ID</label><input id="en-roll" placeholder="e.g. SU24-0142" autocomplete="off"></div>
+            <div class="field"><label>Group / class</label><input id="en-group" placeholder="e.g. BBA-1A" autocomplete="off"></div>
+          </div>
+          <button class="btn btn-primary" id="en-save" style="width:100%"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Add to guest list</button>
+          <p class="hint" id="en-hint">Capture or upload a clear, front-facing photo. The face is turned into a private math signature — the app compares signatures, it does not store or send the photo anywhere.</p>
+        </div>
+      </div>
+    </div>
+    <div id="people" class="people"></div>
+    <div class="empty hidden" id="roster-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><h3>No guests enrolled yet</h3><p>Add a few people above, then head to the Scan tab and point the camera at them.</p></div>
+  </section>
+
+  <!-- LOG -->
+  <section class="panel" id="p-log">
+    <div class="shead"><h2>Entry log</h2><span class="sub">Live across every gate</span>
+      <div class="right"><button class="btn btn-ghost btn-sm" id="btn-export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV</button></div>
+    </div>
+    <div class="log-stats">
+      <div class="stat g"><div class="v" id="st-in">0</div><div class="k">Checked in</div></div>
+      <div class="stat"><div class="v" id="st-total">0</div><div class="k">On guest list</div></div>
+      <div class="stat"><div class="v" id="st-pct">0%</div><div class="k">Turnout</div></div>
+    </div>
+    <div class="card"><div id="log-list"></div>
+      <div class="empty" id="log-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><h3>No check-ins yet</h3><p>Every guest who scans GRANTED appears here in real time, on all gates at once.</p></div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="panel" id="p-settings">
+    <div class="shead"><h2>Setup</h2><span class="sub">Configure this gate</span></div>
+    <div class="card">
+      <div class="set-row"><div><div class="lbl">Event name</div><div class="desc">Shown to every gate</div></div>
+        <div class="ctrl"><input id="set-event" value="Freshers Party 2026"></div></div>
+      <div class="set-row"><div><div class="lbl">This device's gate</div><div class="desc">Labels entries from this device</div></div>
+        <div class="ctrl"><input id="set-gate" value="Gate 1"></div></div>
+      <div class="set-row"><div><div class="lbl">Match strictness</div><div class="desc">Lower = stricter. 0.50 is a good default.</div></div>
+        <div class="ctrl"><div class="range-wrap"><input type="range" id="set-thresh" min="0.40" max="0.62" step="0.01" value="0.50"><output id="thresh-out">0.50</output></div></div></div>
+      <div class="set-row"><div><div class="lbl">Mirror the camera</div><div class="desc">Selfie-style preview</div></div>
+        <div class="ctrl"><select id="set-mirror"><option value="1">On</option><option value="0">Off</option></select></div></div>
+    </div>
+    <div class="card">
+      <div class="set-row"><div><div class="lbl">Sync status</div><div class="desc" id="sync-desc">Checking…</div></div>
+        <div class="ctrl" style="text-align:right"><span id="sync-badge" class="demo-flag">…</span></div></div>
+      <div class="set-row"><div><div class="lbl" style="color:#ffb4ae">Reset entry log</div><div class="desc">Clears all check-ins. Keeps the guest list.</div></div>
+        <div class="ctrl"><button class="btn btn-danger btn-sm" id="btn-reset-log" style="width:100%">Reset log</button></div></div>
+      <div class="set-row"><div><div class="lbl" style="color:#ffb4ae">Clear everything</div><div class="desc">Removes guest list and log (demo reset).</div></div>
+        <div class="ctrl"><button class="btn btn-danger btn-sm" id="btn-reset-all" style="width:100%">Clear all</button></div></div>
+    </div>
+    <p class="hint" style="text-align:center;margin-top:16px">Face recognition runs entirely on this device. Photos never leave the browser — only a numeric face signature and the entry log are shared between gates.</p>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script>
+/* Shared-database config. Enrolled guests, the entry log and the live count
+   are stored here so every gate sees the same data in real time.
+   These values are meant to be public (Firebase web config). */
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDPtu94x-2RzByC7zISI0hzkPylkm1Zt-U",
+  authDomain: "freshers-scanner.firebaseapp.com",
+  projectId: "freshers-scanner",
+  storageBucket: "freshers-scanner.firebasestorage.app",
+  messagingSenderId: "429303108323",
+  appId: "1:429303108323:web:dd51f8b51faa19c36febd6"
+};
+</script>
+
+<script>
+(function(){
+"use strict";
+const $=(s)=>document.querySelector(s), $$=(s)=>document.querySelectorAll(s);
+const boot=$('#boot'), bootMsg=$('#boot-msg');
+
+/* ---------------- state ---------------- */
+let db=null;                       // shared store (or null)
+let roster=new Map();              // id -> {id,name,roll,group,photo,descriptor:Float32Array}
+let entered=new Map();             // id -> {name,roll,group,photo,gate,at}
+let settings={event:'Freshers Party 2026', threshold:0.50};
+const device={ gate: localStorage.getItem('gate')||'Gate 1', mirror: localStorage.getItem('mirror')!=='0' };
+let engineReady=false;
+
+/* ---------------- helpers ---------------- */
+function toast(msg,kind){const t=$('#toast');t.textContent=msg;t.className='toast show'+(kind?(' '+kind):'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='toast',2600);}
+function fmtTime(ts){const d=new Date(ts);return d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});}
+function b64ToBuf(b64){const bin=atob(b64),n=bin.length,by=new Uint8Array(n);for(let i=0;i<n;i++)by[i]=bin.charCodeAt(i);return by.buffer;}
+function uid(){return 'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+
+/* ---------------- engine ---------------- */
+const MODEL_URL='https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model';
+async function loadNet(net,key){const m=window.FACEAPI_MODELS[key];const wm=faceapi.tf.io.decodeWeights(b64ToBuf(m.b64),m.specs);await net.loadFromWeightMap(wm);}
+async function initEngine(){
+  if(!window.faceapi){throw new Error('Face engine failed to load. Check your connection and reload.');}
+  try{await faceapi.tf.setBackend('webgl');await faceapi.tf.ready();}
+  catch(e){await faceapi.tf.setBackend('cpu');await faceapi.tf.ready();}
+  bootMsg.textContent='Loading recognition models…';
+  if(window.FACEAPI_MODELS){
+    // Offline build: models embedded in the page.
+    await loadNet(faceapi.nets.tinyFaceDetector,'tiny_face_detector_model');
+    await loadNet(faceapi.nets.faceLandmark68Net,'face_landmark_68_model');
+    await loadNet(faceapi.nets.faceRecognitionNet,'face_recognition_model');
+  }else{
+    // Hosted build: models load once from CDN (then browser-cached).
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+  }
+  engineReady=true;
+}
+const detOpts=()=>new faceapi.TinyFaceDetectorOptions({inputSize:288,scoreThreshold:0.45});
+async function descriptorFrom(el){
+  const r=await faceapi.detectSingleFace(el,detOpts()).withFaceLandmarks().withFaceDescriptor();
+  return r||null;
+}
+function bestMatch(desc){
+  let best=null,bd=Infinity;
+  roster.forEach(p=>{const d=faceapi.euclideanDistance(desc,p.descriptor);if(d<bd){bd=d;best=p;}});
+  return {person:best,dist:bd};
+}
+
+/* ---------------- storage layer (db or local) ---------------- */
+const local={
+  load(){try{roster=new Map(JSON.parse(localStorage.getItem('roster')||'[]').map(p=>[p.id,{...p,descriptor:new Float32Array(p.descriptor)}]));}catch(e){}
+    try{entered=new Map(JSON.parse(localStorage.getItem('entries')||'[]').map(e=>[e.id,e]));}catch(e){}
+    try{Object.assign(settings,JSON.parse(localStorage.getItem('settings')||'{}'));}catch(e){}},
+  saveRoster(){localStorage.setItem('roster',JSON.stringify([...roster.values()].map(p=>({...p,descriptor:Array.from(p.descriptor)}))));},
+  saveEntries(){localStorage.setItem('entries',JSON.stringify([...entered.values()]));},
+  saveSettings(){localStorage.setItem('settings',JSON.stringify(settings));},
+};
+
+/* ---------------- access control (admin = you) ---------------- */
+const ADMIN_EMAIL='malay@sunstone.in';
+let isAdmin=false, authReady=false, adminUser=null;
+function initAuth(){
+  try{
+    const auth=firebase.auth();
+    auth.onAuthStateChanged(function(u){
+      authReady=true; adminUser=u;
+      isAdmin = !!(u && u.email && u.email.toLowerCase()===ADMIN_EMAIL);
+      if(u && !isAdmin){ /* signed in but not the admin account */ toast('That account isn’t the event admin.', 'err'); }
+      applyAccess();
+    });
+    $('#admin-btn').onclick=async function(){
+      try{
+        if(isAdmin){ if(confirm('Sign out of admin?')) await auth.signOut(); return; }
+        const prov=new firebase.auth.GoogleAuthProvider();
+        await auth.signInWithPopup(prov);
+      }catch(e){ toast('Sign-in failed: '+(e.code||e.message||''), 'err'); }
+    };
+  }catch(e){ /* auth unavailable -> stays scan-only */ applyAccess(); }
+}
+function applyAccess(){
+  document.body.classList.toggle('is-admin', isAdmin);
+  const btn=$('#admin-btn'); if(btn){ btn.classList.toggle('on',isAdmin); btn.title = isAdmin?('Admin: '+(adminUser&&adminUser.email||'')+' — tap to sign out'):'Admin sign-in'; }
+  const ro=$('#ro-note'); if(ro) ro.hidden = isAdmin;
+  const mf=$('#mode-flag'); if(mf){ mf.textContent = isAdmin?'Admin':'View only'; }
+  // if a non-admin is sitting on the (now hidden) Setup tab, send them to Scan
+  if(!isAdmin){ const st=document.querySelector('.tab[data-tab="settings"]'); if(st&&st.getAttribute('aria-selected')==='true'){ document.querySelector('.tab[data-tab="scan"]').click(); } }
+}
+
+async function initStore(){
+  try{
+    if(window.FIREBASE_CONFIG && window.firebase && firebase.firestore){
+      if(!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+      db = firebase.firestore();
+      initAuth();
+    }else if(window.claude&&claude.use){ db = await claude.use('db'); }
+    else db=null;
+  }catch(e){ db=null; }
+  if(db){
+    // settings
+    db.doc('meta/settings').onSnapshot(s=>{ if(s.exists){settings=Object.assign(settings,s.data());applySettings();} });
+    // roster
+    db.collection('roster').onSnapshot(snap=>{
+      roster=new Map();
+      snap.docs.forEach(d=>{const v=d.data();roster.set(d.id,{id:d.id,name:v.name,roll:v.roll,group:v.group,photo:v.photo,descriptor:new Float32Array(v.descriptor)});});
+      renderRoster();renderLog();
+    },err=>{});
+    // entries
+    db.collection('entries').onSnapshot(snap=>{
+      entered=new Map();
+      snap.docs.forEach(d=>{const v=d.data();entered.set(d.id,v);});
+      renderCount();renderLog();renderRoster();
+    },err=>{});
+    setSync(true);
+  }else{
+    // Local / single-device fallback: no shared sign-in, so this device has full access.
+    isAdmin=true;
+    local.load();applySettings();renderRoster();renderLog();renderCount();
+    setSync(false);
+  }
+  applyAccess();
+}
+function setSync(on){
+  $('#count-pill').classList.toggle('sync-off',!on);
+  const badge=$('#sync-badge'),desc=$('#sync-desc');
+  if(on){badge.textContent='● Live · all gates';badge.style.color='var(--green)';desc.textContent='Connected — roster and count shared across every device.';}
+  else{badge.textContent='This device only';desc.textContent='Not connected to shared sync — running on this device alone (roster & count are local).';}
+}
+
+/* writes */
+async function addPerson(p){
+  if(db){await db.collection('roster').doc(p.id).set({name:p.name,roll:p.roll,group:p.group,photo:p.photo,descriptor:Array.from(p.descriptor),enrolledAt:Date.now()});}
+  else{roster.set(p.id,p);local.saveRoster();renderRoster();}
+}
+async function removePerson(id){
+  if(db){await db.collection('roster').doc(id).delete();}
+  else{roster.delete(id);local.saveRoster();renderRoster();}
+}
+async function markEntry(p){
+  const rec={id:p.id,name:p.name,roll:p.roll,group:p.group,photo:p.photo,gate:device.gate,at:Date.now()};
+  if(db){await db.collection('entries').doc(p.id).set(rec);}
+  else{entered.set(p.id,rec);local.saveEntries();renderCount();renderLog();renderRoster();}
+}
+async function saveSettingsRemote(){
+  if(db){try{await db.doc('meta/settings').set({event:settings.event,threshold:settings.threshold});}catch(e){}}
+  else{local.saveSettings();}
+}
+async function resetLog(){
+  if(db){const s=await db.collection('entries').get();await Promise.all(s.docs.map(d=>db.collection('entries').doc(d.id).delete()));}
+  else{entered=new Map();local.saveEntries();renderCount();renderLog();renderRoster();}
+}
+async function resetAll(){
+  await resetLog();
+  if(db){const s=await db.collection('roster').get();await Promise.all(s.docs.map(d=>db.collection('roster').doc(d.id).delete()));}
+  else{roster=new Map();local.saveRoster();renderRoster();}
+}
+
+/* ---------------- rendering ---------------- */
+function renderCount(){$('#live-count').textContent=entered.size;}
+function applySettings(){
+  settings.event=settings.event||'Freshers Party 2026';
+  $('#ev-name').textContent=settings.event;
+  $('#set-event').value=settings.event;
+  $('#gate-label').textContent=device.gate;
+  $('#set-gate').value=device.gate;
+  $('#set-thresh').value=settings.threshold;$('#thresh-out').textContent=Number(settings.threshold).toFixed(2);
+  $('#set-mirror').value=device.mirror?'1':'0';
+  $('#video').classList.toggle('no-mirror',!device.mirror);
+}
+function renderRoster(){
+  const box=$('#people');const arr=[...roster.values()].sort((a,b)=>a.name.localeCompare(b.name));
+  $('#roster-badge').textContent=roster.size;
+  $('#roster-sub').textContent=roster.size?`${roster.size} guest${roster.size>1?'s':''} enrolled`:'No guests enrolled yet';
+  $('#roster-empty').classList.toggle('hidden',roster.size>0);
+  box.innerHTML=arr.map(p=>`<div class="person${entered.has(p.id)?' in':''}">
+    <button class="del" data-del="${p.id}" title="Remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <img class="pf" src="${p.photo||''}" alt="">
+    <div class="pn">${esc(p.name)}</div><div class="pr">${esc(p.roll||'—')}</div></div>`).join('');
+  box.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Remove this guest from the list?'))removePerson(b.dataset.del);});
+}
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function renderLog(){
+  const arr=[...entered.values()].sort((a,b)=>b.at-a.at);
+  $('#st-in').textContent=entered.size;$('#st-total').textContent=roster.size;
+  $('#st-pct').textContent=(roster.size?Math.round(entered.size/roster.size*100):0)+'%';
+  $('#log-empty').classList.toggle('hidden',arr.length>0);
+  $('#log-list').innerHTML=arr.map(e=>`<div class="entry"><img class="ef" src="${e.photo||''}" alt="">
+    <div><div class="en">${esc(e.name)}</div><div class="er">${esc(e.roll||'')}</div></div>
+    <div class="et">${fmtTime(e.at)}<div class="gate">${esc(e.gate||'')}</div></div></div>`).join('');
+}
+
+/* ---------------- SCAN ---------------- */
+let scanStream=null,scanTimer=null,scanning=false;
+let holding=false,heldId=null,holdUntil=0,clearStreak=0;
+const MIN_HOLD=1800;      // keep a verdict on screen at least this long
+const CLEAR_FRAMES=2;     // consecutive "subject gone" frames before resetting
+const video=$('#video'),stage=$('#stage');
+function camMsg(e){
+  const n=(e&&e.name)||'unknown';
+  if(n==='NotAllowedError'||n==='SecurityError') return {t:'Camera is blocked for this page',m:'The browser is refusing the camera. Open this app’s own link directly in Chrome or Safari (not inside another app’s window), then tap the padlock in the address bar → allow Camera → reload and tap Start again.'};
+  if(n==='NotReadableError'||n==='TrackStartError'||n==='AbortError') return {t:'The camera is busy',m:'Another app or tab is using the camera — the Claude desktop app, Zoom/Meet, or another camera tab. Close those (and any other tab of this app), then tap Start scanning again.'};
+  if(n==='NotFoundError'||n==='DevicesNotFoundError') return {t:'No camera found',m:'This device has no camera the browser can see. Try on a phone, or connect a webcam.'};
+  if(n==='OverconstrainedError') return {t:'Camera couldn’t match settings',m:'Tap Start scanning again — it will retry with basic settings.'};
+  if(n==='TypeError') return {t:'Camera not available here',m:'This browser can’t reach the camera on this page. Open the app’s own link in Chrome or Safari over https.'};
+  return {t:'Couldn’t start the camera',m:'Reload the page and try again, or open the app’s own link in Chrome/Safari.'};
+}
+function scanError(e){
+  const info=camMsg(e);
+  $('#scan-idle').classList.remove('hidden');
+  $('#idle-h2').textContent=info.t;
+  $('#idle-p').textContent=info.m;
+  $('#btn-start').innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Try again';
+  $('#scan-status').textContent='Camera error code: '+((e&&e.name)||'unknown');
+  stage.classList.remove('scanning');
+}
+async function startScan(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){scanError({name:'TypeError'});return;}
+  $('#scan-status').textContent='Requesting camera…';
+  const tries=[
+    {video:{facingMode:device.facing||'user',width:{ideal:1280},height:{ideal:720}},audio:false},
+    {video:{facingMode:device.facing||'user'},audio:false},
+    {video:true,audio:false}
+  ];
+  let stream=null,lastErr=null;
+  for(const c of tries){
+    try{stream=await navigator.mediaDevices.getUserMedia(c);break;}
+    catch(e){lastErr=e;if(e.name==='NotAllowedError'||e.name==='NotReadableError'||e.name==='NotFoundError'||e.name==='SecurityError')break;}
+  }
+  if(!stream){scanError(lastErr);return;}
+  scanStream=stream;video.srcObject=stream;
+  try{await video.play();}catch(e){}
+  $('#scan-idle').classList.add('hidden');$('#btn-flip').classList.remove('hidden');$('#btn-stop').classList.remove('hidden');
+  stage.classList.add('scanning');scanning=true;
+  $('#scan-status').textContent='Scanning — looking for faces…';
+  holding=false;heldId=null;clearStreak=0;$('#verdict').className='verdict';
+  loopScan();
+}
+function stopScan(){
+  scanning=false;clearTimeout(scanTimer);
+  holding=false;heldId=null;clearStreak=0;$('#verdict').className='verdict';
+  if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}
+  video.srcObject=null;stage.classList.remove('scanning');
+  $('#scan-idle').classList.remove('hidden');$('#btn-flip').classList.add('hidden');$('#btn-stop').classList.add('hidden');
+  $('#idle-h2').textContent='Point the camera at each guest';
+  $('#idle-p').textContent="The scanner reads the face and instantly shows whether they're on the guest list.";
+  $('#btn-start').innerHTML='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Start scanning';
+  $('#scan-status').textContent='Camera off — tap Start scanning';
+}
+async function flipCam(){device.facing=(device.facing==='environment')?'user':'environment';if(scanning){stopScan();await startScan();}}
+async function loopScan(){
+  if(!scanning || holding) return;   // once a verdict shows, freeze until "Scan next" (or Stop)
+  try{
+    if(roster.size===0){
+      $('#scan-status').textContent='No guests on the list yet — add some in the Roster tab.';
+    }else{
+      const r=await descriptorFrom(video);
+      const match = r ? bestMatch(r.descriptor) : null;
+      const seen = (match && match.person && match.dist<=settings.threshold) ? match.person : null;
+      if(seen){
+        if(entered.has(seen.id)){ showVerdict('already',seen,match.dist); }
+        else{ await markEntry(seen); showVerdict('granted',seen,match.dist); }
+      }else if(r){
+        showVerdict('denied',null,match?match.dist:0);
+      }else{
+        $('#scan-status').textContent='Scanning — looking for faces…';
+      }
+    }
+  }catch(e){/* ignore per-frame errors */}
+  if(scanning && !holding) scanTimer=setTimeout(loopScan,350);
+}
+function scanNext(){
+  clearVerdict();
+  if(scanning){ $('#scan-status').textContent='Scanning — looking for faces…'; loopScan(); }
+}
+function clearVerdict(){
+  holding=false;heldId=null;clearStreak=0;
+  $('#verdict').className='verdict';
+  $('#v-next').hidden=true;
+  $('#scan-status').textContent='Ready — next guest, please';
+}
+const V={granted:{s:'GRANTED',icon:'<path d="M20 6 9 17l-5-5"/>'},denied:{s:'DENIED',icon:'<path d="M18 6 6 18M6 6l12 12"/>'},already:{s:'ALREADY IN',icon:'<path d="M12 8v4M12 16h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>'}};
+function showVerdict(kind,person,dist){
+  const v=$('#verdict'),cfg=V[kind];
+  v.className='verdict show '+kind;
+  $('#v-icon').innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">'+cfg.icon+'</svg>';
+  $('#v-state').textContent=cfg.s;
+  if(person){$('#v-name').textContent=person.name;
+    $('#v-meta').innerHTML=kind==='already'
+      ? `Checked in at <b>${fmtTime(entered.get(person.id).at)}</b> · ${esc(entered.get(person.id).gate||'')}`
+      : `${esc(person.roll||'')} ${person.group?('· '+esc(person.group)):''} · match <b>${(100-dist*100).toFixed(0)}%</b>`;
+  }else{$('#v-name').textContent='Not on the guest list';$('#v-meta').innerHTML='No match found · please check with staff';}
+  beep(kind);
+  $('#scan-status').textContent=(kind==='granted'?`${person.name} — welcome! `:kind==='already'?`${person.name} already checked in — `:'Not recognised — ')+'tap “Scan next”';
+  // Freeze on this verdict until staff taps "Scan next" (or Stop / refresh).
+  holding=true; heldId=person?person.id:null;
+  $('#v-next').hidden=false;
+}
+/* sound */
+let actx=null;
+function beep(kind){
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    const seq=kind==='granted'?[[660,0],[990,.09]]:kind==='already'?[[520,0],[520,.12]]:[[300,0],[196,.14]];
+    seq.forEach(([f,t])=>{const o=actx.createGain(),s=actx.createOscillator();s.type=kind==='denied'?'sawtooth':'sine';s.frequency.value=f;
+      s.connect(o);o.connect(actx.destination);const st=actx.currentTime+t;o.gain.setValueAtTime(.0001,st);o.gain.exponentialRampToValueAtTime(.18,st+.02);o.gain.exponentialRampToValueAtTime(.0001,st+.16);s.start(st);s.stop(st+.18);});
+  }catch(e){}
+}
+
+/* ---------------- ENROLL ---------------- */
+let enStream=null,enrollDesc=null,enrollPhoto=null;
+const enVideo=$('#enroll-video'),enPrev=$('#enroll-preview'),capPh=$('#cap-ph');
+async function enCam(){
+  try{enStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:1280}},audio:false});
+    enVideo.srcObject=enStream;await enVideo.play();
+    enVideo.classList.remove('hidden');enPrev.classList.add('hidden');capPh.classList.add('hidden');
+    $('#en-capture').style.display='';$('#en-cam').style.display='none';
+  }catch(e){const i=camMsg(e);toast(i.t+' — '+i.m,'err');}
+}
+function stopEnCam(){if(enStream){enStream.getTracks().forEach(t=>t.stop());enStream=null;}enVideo.classList.add('hidden');$('#en-capture').style.display='none';$('#en-cam').style.display='';}
+async function processFace(sourceEl,forThumb){
+  bootBusy(true);
+  try{
+    const r=await descriptorFrom(sourceEl);
+    if(!r){toast('No clear face detected — try again with better light.','err');return false;}
+    enrollDesc=r.descriptor;
+    enrollPhoto=makeThumb(sourceEl,r.detection&&r.detection.box);
+    enPrev.src=enrollPhoto;enPrev.classList.remove('hidden');enVideo.classList.add('hidden');capPh.classList.add('hidden');
+    return true;
+  }finally{bootBusy(false);}
+}
+// Crisp, face-cropped thumbnail: tight crop around the detected face, hi-res, sharpened.
+function makeThumb(sourceEl, box){
+  const SZ=256;
+  const sw=sourceEl.videoWidth||sourceEl.naturalWidth||sourceEl.width;
+  const sh=sourceEl.videoHeight||sourceEl.naturalHeight||sourceEl.height;
+  let sx,sy,side;
+  if(box){
+    side=Math.max(box.width,box.height)*1.6;              // pad around the face
+    const cx=box.x+box.width/2, cy=box.y+box.height*0.45; // bias up a touch for headroom
+    sx=cx-side/2; sy=cy-side/2;
+  }else{
+    side=Math.min(sw,sh); sx=(sw-side)/2; sy=(sh-side)/2;
+  }
+  // clamp inside the source
+  side=Math.min(side, sw, sh);
+  sx=Math.max(0,Math.min(sx, sw-side));
+  sy=Math.max(0,Math.min(sy, sh-side));
+  const c=document.createElement('canvas'); c.width=c.height=SZ;
+  const ctx=c.getContext('2d');
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  ctx.drawImage(sourceEl, sx,sy,side,side, 0,0,SZ,SZ);
+  try{ sharpenCanvas(ctx,SZ,SZ,0.55); }catch(e){}
+  return c.toDataURL('image/jpeg',0.92);
+}
+// Light unsharp (3x3) to counter soft webcam frames.
+function sharpenCanvas(ctx,w,h,amt){
+  const src=ctx.getImageData(0,0,w,h), out=ctx.createImageData(w,h);
+  const s=src.data, d=out.data;
+  const k=[0,-amt,0,-amt,1+4*amt,-amt,0,-amt,0];
+  for(let i=0;i<s.length;i++) d[i]=s[i];      // copy (keeps edges + alpha)
+  for(let y=1;y<h-1;y++){
+    for(let x=1;x<w-1;x++){
+      for(let ch=0;ch<3;ch++){
+        let sum=0,ki=0;
+        for(let ky=-1;ky<=1;ky++)for(let kx=-1;kx<=1;kx++){
+          sum+=s[(((y+ky)*w)+(x+kx))*4+ch]*k[ki++];
+        }
+        d[(y*w+x)*4+ch]=sum<0?0:sum>255?255:sum;
+      }
+    }
+  }
+  ctx.putImageData(out,0,0);
+}
+function bootBusy(on){$('#en-save').style.opacity=on?.6:1;$('#en-save').style.pointerEvents=on?'none':'auto';}
+$('#en-cam').onclick=enCam;
+$('#en-capture').onclick=async()=>{const ok=await processFace(enVideo);if(ok){stopEnCam();toast('Face captured — add a name and save.','ok');}};
+$('#en-upload').onclick=()=>$('#file-input').click();
+$('#file-input').onchange=e=>{const f=e.target.files[0];if(!f)return;const img=new Image();img.onload=async()=>{stopEnCam();const ok=await processFace(img);if(ok)toast('Face read from photo — add a name and save.','ok');};img.src=URL.createObjectURL(f);};
+$('#en-save').onclick=async()=>{
+  const name=$('#en-name').value.trim();
+  if(!enrollDesc){toast('Capture or upload a face first.','err');return;}
+  if(!name){toast('Enter the guest’s name.','err');$('#en-name').focus();return;}
+  const p={id:uid(),name,roll:$('#en-roll').value.trim(),group:$('#en-group').value.trim(),photo:enrollPhoto,descriptor:enrollDesc};
+  await addPerson(p);
+  toast(name+' added to the guest list','ok');
+  $('#en-name').value='';$('#en-roll').value='';$('#en-group').value='';
+  enrollDesc=null;enrollPhoto=null;enPrev.classList.add('hidden');capPh.classList.remove('hidden');
+};
+
+/* ---------------- tabs ---------------- */
+$$('.tab').forEach(t=>t.onclick=()=>{
+  $$('.tab').forEach(x=>x.setAttribute('aria-selected','false'));t.setAttribute('aria-selected','true');
+  $$('.panel').forEach(p=>p.classList.remove('active'));$('#p-'+t.dataset.tab).classList.add('active');
+  if(t.dataset.tab!=='scan'&&scanning)stopScan();
+  if(t.dataset.tab!=='roster')stopEnCam();
+});
+
+/* ---------------- settings wiring ---------------- */
+$('#btn-start').onclick=startScan;$('#btn-stop').onclick=stopScan;$('#btn-flip').onclick=flipCam;$('#v-next').onclick=scanNext;
+$('#set-event').onchange=e=>{settings.event=e.target.value.trim()||'Event';applySettings();saveSettingsRemote();};
+$('#set-gate').onchange=e=>{device.gate=e.target.value.trim()||'Gate';localStorage.setItem('gate',device.gate);applySettings();};
+$('#set-thresh').oninput=e=>{settings.threshold=parseFloat(e.target.value);$('#thresh-out').textContent=settings.threshold.toFixed(2);};
+$('#set-thresh').onchange=()=>saveSettingsRemote();
+$('#set-mirror').onchange=e=>{device.mirror=e.target.value==='1';localStorage.setItem('mirror',device.mirror?'1':'0');applySettings();};
+$('#btn-reset-log').onclick=async()=>{if(confirm('Reset the entry log? This clears all check-ins.')){await resetLog();toast('Entry log cleared','ok');}};
+$('#btn-reset-all').onclick=async()=>{if(confirm('Clear the guest list AND the log? This cannot be undone.')){await resetAll();toast('All demo data cleared','ok');}};
+$('#btn-export').onclick=exportCSV;
+async function exportCSV(){
+  const rows=[['Name','Roll/ID','Group','Gate','Checked in']].concat([...entered.values()].sort((a,b)=>a.at-b.at).map(e=>[e.name,e.roll||'',e.group||'',e.gate||'',new Date(e.at).toLocaleString()]));
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const fname=(settings.event||'entries').replace(/[^\w]+/g,'_')+'_entries.csv';
+  try{const dl=window.claude&&claude.use?await claude.use('downloads'):null;
+    if(dl){await dl.save({filename:fname,data:csv});return;}
+  }catch(e){}
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=fname;a.click();
+}
+
+/* ---------------- boot ---------------- */
+(async function(){
+  applySettings();
+  try{ await initEngine(); }
+  catch(e){ bootMsg.textContent=e.message; bootMsg.style.color='#ffb4ae'; return; }
+  await initStore();
+  boot.classList.add('hide');setTimeout(()=>boot.remove(),450);
+})();
+})();
+</script>
